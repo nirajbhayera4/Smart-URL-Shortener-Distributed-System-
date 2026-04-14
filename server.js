@@ -1,44 +1,118 @@
-const express =require('express');
-const {nanoid}= require('nanoid');
-const app=express();
-const PORT=3000;
+const express = require('express');
+const { nanoid } = require('nanoid');
+const db = require('./db');
+const redisClient = require('./redisclient');
 
+const app = express();
+const PORT = 3000;
 
 app.use(express.json());
 
-const urlDatabase={};
+// POST - create short URL
+app.post('/shorten', (req, res) => {
+    const { longUrl } = req.body;
 
-//POST -CREATES SHORT CODE
-
-app.post('/shorten',(req,res)=>{
-    const {longUrl}=req.body;
-    if(!longUrl){
-        return res.status(400).json({error:'please provide a long url'});
+    if (!longUrl) {
+        return res.status(400).json({ error: 'Please provide a long URL' });
     }
 
-    const code=nanoid(6);;
+    const code = nanoid(6);
 
-    urlDatabase[code]=longUrl;
+    db.query(
+        'INSERT INTO urls (long_url, short_code) VALUES (?, ?)',
+        [longUrl, code],
+        (err, result) => {
+            if (err) {
+                return res.status(500).json({ error: 'Database error' });
+            }
 
-    res.json({
-        shortUrl:`http://localhost:${PORT}/${code}`,
-        code: code
-    });
+            res.json({
+                shortUrl: `http://localhost:${PORT}/${code}`,
+                code: code
+            });
+        }
+    );
 });
 
-//GET
+// GET - redirect
+app.get('/:code', async (req, res) => {
+    const { code } = req.params;
 
-app.get('/:code',(req,res)=>{
-    const {code}=req.params;
-    const originalUrl=urldatabase[code];
+    try {
+        const cachedUrl = await redisClient.get(code);
 
-    if(originalUrl){
-        return res.redirect(originalUrl);
-    }
-    else{
-        return res.status(404).json({error:'url not found'});
+        if (cachedUrl) {
+            console.log('Cache hit');
+            return res.redirect(cachedUrl);
+        }
+
+        console.log('Cache miss');
+
+        db.query(
+            'SELECT long_url FROM urls WHERE short_code = ?',
+            [code],
+            async (err, result) => {
+                if (err) {
+                    return res.status(500).json({ error: 'Database error' });
+                }
+
+                if (result.length > 0) {
+                    const longUrl = result[0].long_url;
+
+                    await redisClient.set(code, longUrl, {
+                        EX: 3600
+                    });
+
+                    return res.redirect(longUrl);
+                } else {
+                    return res.status(404).json({ error: 'URL not found' });
+                }
+            }
+        );
+    } catch (error) {
+        return res.status(500).json({ error: 'Redis error' });
     }
 });
-app.listen(PORT,()=>{
-    console.log(`Server is running at http://localhost:${PORT}`);
+
+app.get('/test/:code', async (req, res) => {
+    const { code } = req.params;
+
+    try {
+        const cachedUrl = await redisClient.get(code);
+
+        if (cachedUrl) {
+            console.log('Cache hit');
+            return res.json({ longUrl: cachedUrl, source: 'redis' });
+        }
+
+        console.log('Cache miss');
+
+        db.query(
+            'SELECT long_url FROM urls WHERE short_code = ?',
+            [code],
+            async (err, result) => {
+                if (err) {
+                    return res.status(500).json({ error: 'Database error' });
+                }
+
+                if (result.length > 0) {
+                    const longUrl = result[0].long_url;
+
+                    await redisClient.set(code, longUrl, {
+                        EX: 3600
+                    });
+
+                    return res.json({ longUrl, source: 'mysql' });
+                } else {
+                    return res.status(404).json({ error: 'URL not found' });
+                }
+            }
+        );
+    } catch (error) {
+        return res.status(500).json({ error: 'Redis error' });
+    }
+});
+
+app.listen(PORT, () => {
+    console.log(`Server running at http://localhost:${PORT}`);
 });
