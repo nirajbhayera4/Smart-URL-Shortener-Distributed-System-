@@ -1,56 +1,94 @@
 # Smart URL Shortener (Distributed System)
 
-A simple and efficient URL shortener built with Node.js, Express, and NanoID. This distributed system allows you to create short URLs that redirect to longer ones.
+A URL shortener built with Node.js and Express that stores URL mappings in MySQL and uses Redis as a read cache for fast redirects.
 
 ## Features
 
-- **Fast URL Shortening**: Generate short codes for long URLs using NanoID
-- **RESTful API**: Clean API endpoints for shortening and redirecting URLs
-- **In-Memory Storage**: Quick access with in-memory database (expandable to Redis)
-- **Distributed Ready**: Architecture designed for horizontal scaling
+- Shortens long URLs using `nanoid` (6-character code)
+- Stores mappings in MySQL (`urls` table)
+- Uses Redis cache for faster repeated lookups
+- Redirect endpoint (`GET /:code`) and debug endpoint (`GET /test/:code`)
+
+## Tech Stack
+
+- Node.js
+- Express
+- MySQL (`mysql2`)
+- Redis (`redis`)
+- NanoID
 
 ## Prerequisites
 
-- Node.js (version 14 or higher)
-- npm (comes with Node.js)
+- Node.js 14+
+- npm
+- MySQL server running locally
+- Redis server running locally
 
 ## Installation
 
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   cd "Smart URL Shortener (Distributed System)"
-   ```
-
+1. Clone the repository and open the project folder.
 2. Install dependencies:
-   ```bash
-   npm install
-   ```
 
-## Usage
+```bash
+npm install
+```
 
-### Starting the Server
+## Database Setup
 
-Run the server:
+Create a MySQL database and table:
+
+```sql
+CREATE DATABASE IF NOT EXISTS url_shortener;
+USE url_shortener;
+
+CREATE TABLE IF NOT EXISTS urls (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  long_url TEXT NOT NULL,
+  short_code VARCHAR(20) NOT NULL UNIQUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+## Configuration
+
+Current local configuration used in code:
+
+- MySQL host: `localhost`
+- MySQL user: `root`
+- MySQL database: `url_shortener`
+- Redis URL: `redis://127.0.0.1:6379`
+- App port: `3000`
+
+Note: Your MySQL password is currently hardcoded in `db.js`. For production, move credentials to environment variables.
+
+## Run the Server
+
 ```bash
 node server.js
 ```
 
-The server will start on `http://localhost:3000`
+Server starts at:
 
-### API Endpoints
+```text
+http://localhost:3000
+```
 
-#### Shorten a URL
-**POST** `/shorten`
+## API Endpoints
 
-Request body:
+### 1. Shorten URL
+
+- Method: `POST`
+- Route: `/shorten`
+- Body:
+
 ```json
 {
-  "longUrl": "https://www.example.com/very/long/url/that/needs/shortening"
+  "longUrl": "https://www.example.com"
 }
 ```
 
-Response:
+- Success response:
+
 ```json
 {
   "shortUrl": "http://localhost:3000/abc123",
@@ -58,56 +96,58 @@ Response:
 }
 ```
 
-#### Redirect to Original URL
-**GET** `/:code`
+### 2. Redirect to Original URL
 
-Example: `GET http://localhost:3000/abc123` redirects to the original long URL.
+- Method: `GET`
+- Route: `/:code`
+- Behavior:
+  - Checks Redis first (cache hit -> redirect)
+  - On cache miss, fetches from MySQL, caches for 1 hour (`EX: 3600`), then redirects
 
-## Example Usage
+### 3. Test Lookup Source
 
-Using curl:
+- Method: `GET`
+- Route: `/test/:code`
+- Response example:
+
+```json
+{
+  "longUrl": "https://www.example.com",
+  "source": "redis"
+}
+```
+
+(`source` can be `redis` or `mysql`.)
+
+## Quick Test with cURL
 
 ```bash
-# Shorten a URL
 curl -X POST http://localhost:3000/shorten \
   -H "Content-Type: application/json" \
-  -d '{"longUrl": "https://www.example.com"}'
+  -d '{"longUrl":"https://www.google.com"}'
 
-# Access the short URL (this will redirect)
-curl -L http://localhost:3000/abc123
+curl -L http://localhost:3000/<code>
+
+curl http://localhost:3000/test/<code>
 ```
 
 ## Project Structure
 
-```
-├── server.js          # Main server file
-├── db.js              # Database configuration (for future use)
-├── redisclient.js     # Redis client setup (for distributed storage)
-├── controllers.js/
-│   └── urlController.js  # URL handling logic (to be implemented)
-├── routes/
-│   └── urlRoutes.js      # Route definitions (to be implemented)
-├── package.json       # Dependencies and scripts
-└── README.md          # This file
+```text
+.
+|-- db.js
+|-- redisclient.js
+|-- server.js
+|-- package.json
+|-- package-lock.json
+`-- README.md
 ```
 
-## Future Enhancements
+## Future Improvements
 
-- [ ] Persistent database storage
-- [ ] Redis integration for distributed caching
-- [ ] Analytics and click tracking
-- [ ] Custom short codes
-- [ ] Rate limiting
-- [ ] Authentication and user management
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
-
-## License
-
-This project is licensed under the MIT License.
-
+- Move DB/Redis configuration to `.env`
+- Add URL validation
+- Add rate limiting
+- Add analytics (click count, timestamps)
+- Add custom short code support
+- Add tests and CI
