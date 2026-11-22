@@ -4,6 +4,7 @@
     "dev:backend": "node server.js"
   },
   "dependencies": {
+    "dotenv": "^18.0.10",
     "express": "^5.2.1",
     "mysql2": "^3.22.0",
     "nanoid": "^5.1.7",
