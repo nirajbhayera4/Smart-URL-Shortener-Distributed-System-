@@ -51,15 +51,16 @@ CREATE TABLE IF NOT EXISTS urls (
 
 ## Configuration
 
-Current local configuration used in code:
+The server reads these environment variables (defaults are shown):
 
-- MySQL host: `localhost`
-- MySQL user: `root`
-- MySQL database: `url_shortener`
-- Redis URL: `redis://127.0.0.1:6379`
+- `DB_HOST`: `localhost`
+- `DB_USER`: `root`
+- `DB_PASSWORD`: empty
+- `DB_NAME`: `url_shortener`
+- `REDIS_URL`: `redis://127.0.0.1:6379`
 - App port: `3000`
 
-Note: Your MySQL password is currently hardcoded in `db.js`. For production, move credentials to environment variables.
+Set `DB_PASSWORD` to the password configured for your local MySQL account before starting the server. Redis is an optional cache; URL lookups continue through MySQL while Redis is unavailable.
 
 ## Run the Server
 
@@ -72,6 +73,8 @@ Server starts at:
 ```text
 http://localhost:3000
 ```
+
+The React landing page is served at the root URL. Paste a link there to create a short URL, then copy the result. The page loads React 18 from esm.sh and the fonts from Google Fonts, so those assets need an internet connection.
 
 ## API Endpoints
 

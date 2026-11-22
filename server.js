@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const { nanoid } = require('nanoid');
 const db = require('./db');
 const redisClient = require('./redisclient');
@@ -7,6 +8,26 @@ const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+async function getCachedUrl(code) {
+    if (!redisClient.isReady) return null;
+    try {
+        return await redisClient.get(code);
+    } catch (error) {
+        console.error('Redis lookup failed; using MySQL:', error.message);
+        return null;
+    }
+}
+
+async function cacheUrl(code, longUrl) {
+    if (!redisClient.isReady) return;
+    try {
+        await redisClient.set(code, longUrl, { EX: 3600 });
+    } catch (error) {
+        console.error('Redis cache write failed:', error.message);
+    }
+}
 
 // POST - create short URL
 app.post('/shorten', (req, res) => {
@@ -39,7 +60,7 @@ app.get('/:code', async (req, res) => {
     const { code } = req.params;
 
     try {
-        const cachedUrl = await redisClient.get(code);
+        const cachedUrl = await getCachedUrl(code);
 
         if (cachedUrl) {
             console.log('Cache hit');
@@ -59,9 +80,7 @@ app.get('/:code', async (req, res) => {
                 if (result.length > 0) {
                     const longUrl = result[0].long_url;
 
-                    await redisClient.set(code, longUrl, {
-                        EX: 3600
-                    });
+                    await cacheUrl(code, longUrl);
 
                     return res.redirect(longUrl);
                 } else {
@@ -70,7 +89,8 @@ app.get('/:code', async (req, res) => {
             }
         );
     } catch (error) {
-        return res.status(500).json({ error: 'Redis error' });
+        console.error('Redirect failed:', error.message);
+        return res.status(500).json({ error: 'Could not look up this URL' });
     }
 });
 
@@ -78,7 +98,7 @@ app.get('/test/:code', async (req, res) => {
     const { code } = req.params;
 
     try {
-        const cachedUrl = await redisClient.get(code);
+        const cachedUrl = await getCachedUrl(code);
 
         if (cachedUrl) {
             console.log('Cache hit');
@@ -98,9 +118,7 @@ app.get('/test/:code', async (req, res) => {
                 if (result.length > 0) {
                     const longUrl = result[0].long_url;
 
-                    await redisClient.set(code, longUrl, {
-                        EX: 3600
-                    });
+                    await cacheUrl(code, longUrl);
 
                     return res.json({ longUrl, source: 'mysql' });
                 } else {
@@ -109,7 +127,8 @@ app.get('/test/:code', async (req, res) => {
             }
         );
     } catch (error) {
-        return res.status(500).json({ error: 'Redis error' });
+        console.error('URL lookup failed:', error.message);
+        return res.status(500).json({ error: 'Could not look up this URL' });
     }
 });
 
