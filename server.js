@@ -1,14 +1,12 @@
 const express = require('express');
-const path = require('path');
 const { nanoid } = require('nanoid');
 const db = require('./db');
 const redisClient = require('./redisclient');
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
 
 async function getCachedUrl(code) {
     if (!redisClient.isReady) return null;

@@ -64,17 +64,26 @@ Set `DB_PASSWORD` to the password configured for your local MySQL account before
 
 ## Run the Server
 
+Install backend dependencies from the project root:
+
 ```bash
-node server.js
+npm install
+npm start
 ```
 
-Server starts at:
+The backend API starts at `http://localhost:3000`.
 
-```text
-http://localhost:3000
+In a second terminal, install and run the separate React frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
-The React landing page is served at the root URL. Paste a link there to create a short URL, then copy the result. The page loads React 18 from esm.sh and the fonts from Google Fonts, so those assets need an internet connection.
+Open the Vite URL shown in the terminal (usually `http://localhost:5173`). The frontend proxies `/shorten` and `/test` requests to the backend. Short links continue to use the backend address on port 3000.
+
+The React page and fonts need an internet connection for Google Fonts. URL shortening also requires MySQL; Redis is an optional cache.
 
 ## API Endpoints
 
