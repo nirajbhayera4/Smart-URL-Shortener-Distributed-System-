@@ -29,6 +29,13 @@ async function cacheUrl(code, longUrl) {
     }
 }
 
+function redirectAndRecordClick(res, code, longUrl) {
+    db.query('INSERT INTO url_clicks (short_code) VALUES (?)', [code], (error) => {
+        if (error) console.error('Could not record click:', error.message);
+        res.redirect(longUrl);
+    });
+}
+
 // POST - create short URL
 app.post('/shorten', (req, res) => {
     const { longUrl } = req.body;
@@ -55,6 +62,50 @@ app.post('/shorten', (req, res) => {
     );
 });
 
+// GET - analytics for a short URL
+app.get('/analytics/:code', (req, res) => {
+    const { code } = req.params;
+
+    db.query(
+        `SELECT u.short_code AS code, u.long_url AS longUrl, u.created_at AS createdAt,
+                COUNT(c.id) AS clickCount, MAX(c.clicked_at) AS lastClickedAt
+         FROM urls u
+         LEFT JOIN url_clicks c ON c.short_code = u.short_code
+         WHERE u.short_code = ?
+         GROUP BY u.short_code, u.long_url, u.created_at`,
+        [code],
+        (error, result) => {
+            if (error) return res.status(500).json({ error: 'Database error' });
+            if (result.length === 0) return res.status(404).json({ error: 'URL not found' });
+
+            db.query(
+                'SELECT clicked_at AS clickedAt FROM url_clicks WHERE short_code = ? ORDER BY clicked_at DESC LIMIT 20',
+                [code],
+                (clickError, clicks) => {
+                    if (clickError) return res.status(500).json({ error: 'Database error' });
+
+                    db.query(
+                        `SELECT DATE_FORMAT(clicked_at, '%Y-%m-%d') AS day, COUNT(*) AS clicks
+                         FROM url_clicks
+                         WHERE short_code = ? AND clicked_at >= CURDATE() - INTERVAL 6 DAY
+                         GROUP BY DATE(clicked_at)
+                         ORDER BY day ASC`,
+                        [code],
+                        (dailyError, dailyClicks) => {
+                            if (dailyError) return res.status(500).json({ error: 'Database error' });
+                            return res.json({
+                                ...result[0],
+                                recentClicks: clicks.map((click) => click.clickedAt),
+                                dailyClicks,
+                            });
+                        }
+                    );
+                }
+            );
+        }
+    );
+});
+
 // GET - redirect
 app.get('/:code', async (req, res) => {
     const { code } = req.params;
@@ -64,7 +115,7 @@ app.get('/:code', async (req, res) => {
 
         if (cachedUrl) {
             console.log('Cache hit');
-            return res.redirect(cachedUrl);
+            return redirectAndRecordClick(res, code, cachedUrl);
         }
 
         console.log('Cache miss');
@@ -82,7 +133,7 @@ app.get('/:code', async (req, res) => {
 
                     await cacheUrl(code, longUrl);
 
-                    return res.redirect(longUrl);
+                    return redirectAndRecordClick(res, code, longUrl);
                 } else {
                     return res.status(404).json({ error: 'URL not found' });
                 }

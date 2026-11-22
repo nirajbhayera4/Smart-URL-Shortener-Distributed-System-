@@ -48,6 +48,16 @@ CREATE TABLE IF NOT EXISTS urls (
   short_code VARCHAR(20) NOT NULL UNIQUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS url_clicks (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  short_code VARCHAR(20) NOT NULL,
+  clicked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_url_clicks_code_time (short_code, clicked_at),
+  CONSTRAINT fk_url_clicks_url
+    FOREIGN KEY (short_code) REFERENCES urls(short_code)
+    ON DELETE CASCADE
+);
 ```
 
 The MySQL account configured in `.env` must be allowed to access this database and table.
@@ -83,7 +93,7 @@ cd frontend
 npm run dev
 ```
 
-Open the Vite URL printed in the terminal, usually `http://localhost:5173`. The frontend proxies `/shorten` and `/test` requests to the backend at `http://localhost:3000`. The generated short URLs point to the backend, which handles redirects.
+Open the Vite URL printed in the terminal, usually `http://localhost:5173`. The frontend proxies `/shorten`, `/test`, and `/analytics` requests to the backend at `http://localhost:3000`. The generated short URLs point to the backend, which handles redirects.
 
 ## Build the frontend
 
@@ -121,7 +131,7 @@ Success response:
 
 ### Redirect to the original URL
 
-`GET /:code` checks Redis first, then MySQL on a cache miss. A successful MySQL lookup is cached in Redis for one hour when Redis is available, then the request redirects to the original URL.
+`GET /:code` checks Redis first, then MySQL on a cache miss. A successful MySQL lookup is cached in Redis for one hour when Redis is available. Each redirect records a click timestamp in `url_clicks` before redirecting. If click logging fails, the server logs the error and still redirects.
 
 ### Inspect a short code
 
@@ -134,6 +144,26 @@ Success response:
 }
 ```
 
+### View click analytics
+
+`GET /analytics/:code` returns the link creation time, total click count, latest click time, daily click counts for the last seven days, and up to 20 recent click timestamps. The React page shows daily counts in an animated bar chart; select **View analytics** after creating a link.
+
+```json
+{
+  "code": "abc123",
+  "longUrl": "https://www.example.com",
+  "createdAt": "2026-01-02T03:04:05.000Z",
+  "clickCount": 12,
+  "lastClickedAt": "2026-01-03T03:04:05.000Z",
+  "dailyClicks": [{ "day": "2026-01-03", "clicks": 4 }],
+  "recentClicks": ["2026-01-03T03:04:05.000Z"]
+}
+```
+
+After shortening a link in the React page, select **View analytics** to see its click count and timestamps. Select **Refresh analytics** to update the values after more visits.
+
+Run the database setup SQL above to create `url_clicks`. If the `urls` table already exists, run only the `CREATE TABLE url_clicks` statement.
+
 ## Project structure
 
 ```text
@@ -141,6 +171,8 @@ Success response:
 ├── frontend/
 │   ├── src/
 │   │   ├── app.js
+│   │   ├── analytics.css
+│   │   ├── chart.css
 │   │   └── styles.css
 │   ├── index.html
 │   ├── package.json
@@ -158,6 +190,5 @@ Success response:
 
 - Add server-side URL validation
 - Add rate limiting
-- Add analytics (click count, timestamps)
 - Add custom short code support
 - Add automated tests and continuous integration (CI)

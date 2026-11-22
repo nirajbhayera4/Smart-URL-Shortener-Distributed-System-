@@ -1,11 +1,24 @@
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import './analytics.css';
+import './chart.css';
 
 const h = React.createElement;
+
+function localDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 function App() {
   const [url, setUrl] = useState('');
   const [shortUrl, setShortUrl] = useState('');
+  const [shortCode, setShortCode] = useState('');
+  const [analytics, setAnalytics] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState('');
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -14,6 +27,9 @@ function App() {
     event.preventDefault();
     setStatus('');
     setShortUrl('');
+    setShortCode('');
+    setAnalytics(null);
+    setAnalyticsError('');
     let normalizedUrl = url.trim();
     if (!/^https?:\/\//i.test(normalizedUrl)) normalizedUrl = `https://${normalizedUrl}`;
     try {
@@ -33,11 +49,27 @@ function App() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'We couldn’t shorten that link.');
       setShortUrl(data.shortUrl);
+      setShortCode(data.code);
       setStatus('Your link is ready to share.');
     } catch (error) {
       setStatus(error.message || 'Could not reach the server. Please try again.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadAnalytics() {
+    setAnalyticsLoading(true);
+    setAnalyticsError('');
+    try {
+      const response = await fetch(`/analytics/${encodeURIComponent(shortCode)}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Could not load analytics.');
+      setAnalytics(data);
+    } catch (error) {
+      setAnalyticsError(error.message || 'Could not load analytics.');
+    } finally {
+      setAnalyticsLoading(false);
     }
   }
 
@@ -50,6 +82,20 @@ function App() {
       setStatus('Copy wasn’t available here. Select the link to copy it.');
     }
   }
+
+  const dailyChart = analytics ? Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setHours(12, 0, 0, 0);
+    date.setDate(date.getDate() - (6 - index));
+    const key = localDateKey(date);
+    const dayData = (analytics.dailyClicks || []).find((item) => item.day === key);
+    return {
+      key,
+      label: date.toLocaleDateString(undefined, { weekday: 'short' }),
+      clicks: Number(dayData?.clicks || 0),
+    };
+  }) : [];
+  const chartMax = Math.max(1, ...dailyChart.map((day) => day.clicks));
 
   return h('main', { className: 'page-shell' },
     h('div', { className: 'orb orb-peach' }), h('div', { className: 'orb orb-blue' }),
@@ -74,6 +120,26 @@ function App() {
           h('div', { className: 'result-text' }, h('span', null, 'YOUR SHORT LINK'), h('a', { href: shortUrl }, shortUrl)),
           h('button', { className: 'copy-button', type: 'button', onClick: copyLink }, copied ? 'Copied ✓' : 'Copy link')),
         h('div', { className: 'trust-note enter enter-4' }, h('span', null, '✳'), ' Fast, simple, and ready to share'),
+        shortUrl && h('div', { className: 'analytics-wrap' },
+          h('button', { className: 'analytics-toggle', type: 'button', onClick: loadAnalytics, disabled: analyticsLoading }, analyticsLoading ? 'Loading analytics…' : analytics ? 'Refresh analytics' : 'View analytics'),
+          analyticsError && h('p', { className: 'analytics-error', role: 'status' }, analyticsError),
+          analytics && h('div', { className: 'analytics-panel' },
+            h('div', { className: 'analytics-stats' },
+              h('div', null, h('strong', null, analytics.clickCount), h('span', null, 'total clicks')),
+              h('div', null, h('strong', null, analytics.createdAt ? new Date(analytics.createdAt).toLocaleString() : '—'), h('span', null, 'created')),
+              h('div', null, h('strong', null, analytics.lastClickedAt ? new Date(analytics.lastClickedAt).toLocaleString() : 'No clicks yet'), h('span', null, 'last click'))),
+            h('div', { className: 'click-chart' },
+              h('div', { className: 'chart-title' }, h('strong', null, 'Clicks over time'), h('span', null, 'Last 7 days')),
+              h('div', { className: 'chart-bars' }, dailyChart.map((day, index) => {
+                const height = day.clicks ? Math.max(10, (day.clicks / chartMax) * 100) : 3;
+                return h('div', { className: 'chart-column', key: day.key, title: `${day.key}: ${day.clicks} clicks` },
+                  h('span', { className: 'chart-value' }, day.clicks),
+                  h('div', { className: 'chart-track' }, h('div', { className: 'chart-bar', style: { height: `${height}%`, animationDelay: `${index * 65}ms` } })),
+                  h('span', { className: 'chart-day' }, day.label));
+              }))),
+            analytics.recentClicks.length > 0 && h('div', { className: 'recent-clicks' },
+              h('span', null, 'RECENT CLICKS'),
+              h('ul', null, analytics.recentClicks.map((timestamp, index) => h('li', { key: `${timestamp}-${index}` }, new Date(timestamp).toLocaleString())))))),
         h('div', { className: 'link-demo', 'aria-label': 'A long link becomes a short link' },
           h('div', { className: 'demo-long' }, h('span', { className: 'demo-link-icon' }, '↗'), h('span', null, 'yourwebsite.com/a/very/long/link')), 
           h('div', { className: 'demo-arrow' }, '↓'),
