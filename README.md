@@ -1,15 +1,16 @@
 # Shortr — Smart URL Shortener
 
-A React and Express URL shortener. The frontend runs as its own Vite app; the backend creates short codes and stores URL mappings in MySQL. Redis caches lookups to speed up redirects.
+Shortr turns long web addresses into shareable short links. The React frontend runs as a Vite app, while an Express backend stores links and click activity in MySQL and uses Redis to cache redirect lookups.
 
 ## Features
 
-- React landing page with URL validation, shortening, and copy-to-clipboard
-- Six-character short codes generated with Nano ID
-- MySQL storage for original URLs and short codes
-- Redis read cache with a one-hour TTL; redirects fall back to MySQL if Redis is unavailable
-- Redirect endpoint (`GET /:code`) and lookup-source endpoint (`GET /test/:code`)
-- Database and service configuration loaded from a private `.env` file
+- Responsive React interface with URL entry, short-link creation, and copy-to-clipboard
+- Backend validation accepts HTTP and HTTPS URLs up to 2,048 characters
+- Unique six-character short codes generated with Nano ID
+- MySQL tables for links and click events; the backend creates the configured database and tables at startup
+- Optional Redis lookup cache with a one-hour TTL; requests fall back to MySQL when Redis is unavailable
+- Click tracking and a link analytics dashboard with total clicks, creation and latest-visit times, a seven-day chart, and up to 20 recent visits
+- Configurable database, Redis, and server settings via a private `.env` file
 
 ## Requirements
 
@@ -36,7 +37,7 @@ cd ..
 
 ## Database setup
 
-Connect to your MySQL server in Workbench and run:
+At startup, the backend creates the configured database and the `urls` and `url_clicks` tables if they do not already exist. The MySQL account must have permission to create the database and tables. To create them manually instead, run the following SQL (replace `url_shortener` if `DB_NAME` is different):
 
 ```sql
 CREATE DATABASE IF NOT EXISTS url_shortener;
@@ -60,7 +61,7 @@ CREATE TABLE IF NOT EXISTS url_clicks (
 );
 ```
 
-The MySQL account configured in `.env` must be allowed to access this database and table.
+If your MySQL account cannot create databases, create the database and tables manually and grant that account access before starting the backend.
 
 ## Configuration
 
@@ -93,7 +94,7 @@ cd frontend
 npm run dev
 ```
 
-Open the Vite URL printed in the terminal, usually `http://localhost:5173`. The frontend proxies `/shorten`, `/test`, and `/analytics` requests to the backend at `http://localhost:3000`. The generated short URLs point to the backend, which handles redirects.
+Open the Vite URL printed in the terminal, usually `http://localhost:5173`. Vite proxies `/shorten`, `/test`, and `/analytics` requests to `http://localhost:3000`. Short links point to the backend, which records clicks and redirects visitors.
 
 ## Build the frontend
 
@@ -131,7 +132,7 @@ Success response:
 
 ### Redirect to the original URL
 
-`GET /:code` checks Redis first, then MySQL on a cache miss. A successful MySQL lookup is cached in Redis for one hour when Redis is available. Each redirect records a click timestamp in `url_clicks` before redirecting. If click logging fails, the server logs the error and still redirects.
+`GET /:code` checks Redis first, then MySQL on a cache miss. A successful MySQL lookup is cached in Redis for one hour when Redis is available. Each redirect records a click timestamp in `url_clicks`; a click-logging error is logged and does not prevent the redirect.
 
 ### Inspect a short code
 
@@ -146,7 +147,7 @@ Success response:
 
 ### View click analytics
 
-`GET /analytics/:code` returns the link creation time, total click count, latest click time, daily click counts for the last seven days, and up to 20 recent click timestamps. The React page shows daily counts in an animated bar chart; select **View analytics** after creating a link.
+`GET /analytics/:code` returns the link creation time, total click count, latest click time, daily click counts for the last seven days, and up to 20 recent click timestamps. The frontend's analytics dashboard loads on demand and can be refreshed after more visits.
 
 ```json
 {
@@ -160,9 +161,7 @@ Success response:
 }
 ```
 
-After shortening a link in the React page, select **View analytics** to see its click count and timestamps. Select **Refresh analytics** to update the values after more visits.
-
-Run the database setup SQL above to create `url_clicks`. If the `urls` table already exists, run only the `CREATE TABLE url_clicks` statement.
+After creating a link, choose **Load analytics** in the dashboard to view its activity. Choose **Refresh data** to update the values after more visits.
 
 ## Project structure
 
@@ -178,7 +177,9 @@ Run the database setup SQL above to create `url_clicks`. If the `urls` table alr
 │   ├── package.json
 │   └── vite.config.js
 ├── controllers.js/
+│   └── urlController.js
 ├── routes/
+│   └── urlRouted.js
 ├── db.js
 ├── redisclient.js
 ├── server.js
@@ -186,9 +187,7 @@ Run the database setup SQL above to create `url_clicks`. If the `urls` table alr
 ├── package.json
 └── README.md
 ```
-## Future Improvements
+## Potential next steps
 
-- Add server-side URL validation
-- Add rate limiting
-- Add custom short code support
+- Add rate limiting and custom short codes
 - Add automated tests and continuous integration (CI)
