@@ -6,6 +6,7 @@ Shortr turns long web addresses into shareable short links. The React frontend r
 
 - Responsive React interface with URL entry, short-link creation, and copy-to-clipboard
 - Backend validation accepts HTTP and HTTPS URLs up to 2,048 characters
+- Short-link creation is limited to 10 requests per IP in a 15-minute window; excess requests receive HTTP `429`
 - Unique six-character short codes generated with Nano ID
 - MySQL tables for links and click events; the backend creates the configured database and tables at startup
 - Optional Redis lookup cache with a one-hour TTL; requests fall back to MySQL when Redis is unavailable
@@ -107,6 +108,18 @@ npm run preview
 
 Vite writes production assets to `frontend/dist`. The backend currently serves the API and redirects; deploy the built frontend separately or configure a web server to serve those assets.
 
+## Tests and continuous integration
+
+Run the backend unit tests from the project root:
+
+```bash
+npm test
+```
+
+The current tests cover HTTP/HTTPS URL validation, malformed or unsupported protocols, and the 2,048-character limit. They use Node's built-in test runner and do not require MySQL or Redis.
+
+GitHub Actions runs the backend tests and builds the frontend on every push and pull request using the workflow in `.github/workflows/ci.yml`. The CI build installs backend and frontend dependencies with `npm ci`.
+
 ## API
 
 ### Shorten a URL
@@ -183,11 +196,17 @@ After creating a link, choose **Load analytics** in the dashboard to view its ac
 ├── db.js
 ├── redisclient.js
 ├── server.js
+├── urlValidation.js
+├── test/
+│   └── urlValidation.test.js
+├── .github/
+│   └── workflows/
+│       └── ci.yml
 ├── .env.example
 ├── package.json
 └── README.md
 ```
 ## Potential next steps
 
-- Add rate limiting and custom short codes
-- Add automated tests and continuous integration (CI)
+- Add custom short codes
+- Expand automated coverage to API routes and analytics
