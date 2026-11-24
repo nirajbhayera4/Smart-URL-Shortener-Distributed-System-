@@ -2,6 +2,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
 const express = require('express');
 const { nanoid } = require('nanoid');
+const { rateLimit } = require('express-rate-limit');
 const db = require('./db');
 const redisClient = require('./redisclient');
 
@@ -9,6 +10,13 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
+const shortenLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    limit: 10, // per IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many links created. Try again in 15 minutes.' },
+});
 
 async function getCachedUrl(code) {
     if (!redisClient.isReady) return null;
@@ -77,7 +85,7 @@ async function initializeDatabase() {
 }
 
 // POST - create short URL
-app.post('/shorten', (req, res) => {
+app.post('/shorten', shortenLimiter,  (req, res) => {
     const { longUrl } = req.body;
     if (!validateWebUrl(longUrl)) {
         return res.status(400).json({

@@ -6,6 +6,7 @@
   "dependencies": {
     "dotenv": "^18.0.10",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.7.5",
     "mysql2": "^3.22.0",
     "nanoid": "^5.1.7",
     "redis": "^5.11.0"
