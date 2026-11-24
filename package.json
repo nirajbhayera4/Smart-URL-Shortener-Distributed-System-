@@ -1,7 +1,8 @@
 {
   "scripts": {
     "start": "node server.js",
-    "dev:backend": "node server.js"
+    "dev:backend": "node server.js",
+    "test": "node --test"
   },
   "dependencies": {
     "dotenv": "^18.0.10",

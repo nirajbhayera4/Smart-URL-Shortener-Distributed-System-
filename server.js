@@ -5,6 +5,7 @@ const { nanoid } = require('nanoid');
 const { rateLimit } = require('express-rate-limit');
 const db = require('./db');
 const redisClient = require('./redisclient');
+const { validateWebUrl } = require('./urlValidation');
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -47,17 +48,6 @@ function redirectAndRecordClick(res, code, longUrl) {
 function query(sql, params = []) {
     return db.promise().query(sql, params).then(([rows]) => rows);
 }
-function validateWebUrl(value) {
-    if (typeof value !== 'string' || value.length > 2048) return false;
-
-    try {
-        const url = new URL(value);
-        return ['http:', 'https:'].includes(url.protocol) && Boolean(url.hostname);
-    } catch {
-        return false;
-    }
-}
-
 async function initializeDatabase() {
     const configuredName = process.env.DB_NAME || 'url_shortener';
     if (!/^[A-Za-z0-9_$]+$/.test(configuredName)) {
