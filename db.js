@@ -5,7 +5,6 @@ const db = mysql.createConnection({
   port: Number(process.env.DB_PORT) || 3306,
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'url_shortener',
 });
 
 // A database connection failure should be returned by the affected request,
